@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bokstavsspelet - Ordträning2</title>
+    <title>Bokstavsspelet - Ordträning</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
@@ -124,7 +124,7 @@
 <body>
     <div id="game-container" class="game-container">
         <div id="start-screen" class="card">
-            <h1 class="text-4xl font-bold mb-4 text-gray-800">Bokstavsspelet - Ordträning2</h1>
+            <h1 class="text-4xl font-bold mb-4 text-gray-800">Bokstavsspelet - Ordträning</h1>
             <p class="text-lg text-gray-600 mb-6">Välj om du vill träna på ord med versaler (stora bokstäver) eller gemener (små bokstäver):</p>
             <div class="flex flex-col sm:flex-row justify-center gap-4">
                 <button id="start-uppercase-btn" class="btn btn-primary flex-1">Versaler</button>
@@ -243,20 +243,19 @@
             recognition.maxAlternatives = 1; // Bara det bästa resultatet
 
             recognition.onresult = (event) => {
-                isListening = false; // Slutar lyssna efter resultat
+                isListening = false; // Återställ flaggan direkt vid resultat
                 const speechResult = event.results[0][0].transcript.trim().toUpperCase();
                 console.log('Taligenkänningsresultat (hört):', speechResult);
                 handleSpeechResult(speechResult);
             };
 
             recognition.onspeechend = () => {
-                // recognition.stop(); // Stoppa när talet är slut, hanteras av onend
                 console.log("Recognition onspeechend event fired.");
             };
 
             recognition.onerror = (event) => {
+                isListening = false; // Återställ flaggan direkt vid fel
                 console.error('Taligenkänningsfel:', event.error);
-                isListening = false; // Slutar lyssna vid fel
                 listeningSpinner.classList.add('hidden'); // Dölj spinner vid fel
 
                 if (event.error === 'no-speech') {
