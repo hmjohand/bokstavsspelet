@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bokstavsspelet - Ordträning</title>
+    <title>Bokstavsspelet - Ordträning2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
@@ -232,6 +232,7 @@
                 startUppercaseBtn.classList.add('disabled-button');
                 startLowercaseBtn.classList.add('disabled-button');
                 showMessage('Din webbläsare stöder inte taligenkänning. Spelet kan tyvärr inte spelas.', 'text-red-600');
+                console.error("Web Speech API not supported in this browser.");
                 return;
             }
 
@@ -244,12 +245,13 @@
             recognition.onresult = (event) => {
                 isListening = false; // Slutar lyssna efter resultat
                 const speechResult = event.results[0][0].transcript.trim().toUpperCase();
-                console.log('Taligenkänningsresultat:', speechResult);
+                console.log('Taligenkänningsresultat (hört):', speechResult);
                 handleSpeechResult(speechResult);
             };
 
             recognition.onspeechend = () => {
                 // recognition.stop(); // Stoppa när talet är slut, hanteras av onend
+                console.log("Recognition onspeechend event fired.");
             };
 
             recognition.onerror = (event) => {
@@ -275,7 +277,7 @@
                     startUppercaseBtn.classList.add('disabled-button');
                     startLowercaseBtn.classList.add('disabled-button');
                 } else {
-                    showMessage('Ett oväntat fel uppstod med taligenkänningen. Försök igen.', 'text-red-600');
+                    showMessage(`Ett oväntat fel uppstod med taligenkänningen: ${event.error}. Försök igen.`, 'text-red-600');
                     // För andra fel, försök att starta om lyssnandet om spelet är aktivt
                     if (gameActive) {
                         setTimeout(() => startListening(), 1000);
@@ -284,6 +286,7 @@
             };
 
             recognition.onend = () => {
+                console.log("Recognition onend event fired."); // Log onend event
                 isListening = false; // Alltid sätt till false när recognition avslutas
                 // Om spelet är aktivt och vi väntar på tal (nästa ord-knappen är dold),
                 // försök att starta om lyssnandet efter en kort fördröjning.
@@ -304,12 +307,20 @@
 
         // Funktion för att starta lyssnandet
         function startListening() {
-            if (!recognition || isListening) return; // Förhindra dubbla startar
+            if (!recognition) {
+                console.warn("SpeechRecognition API not initialized. Cannot start listening.");
+                return;
+            }
+            if (isListening) {
+                console.log("Already listening, not starting new recognition.");
+                return;
+            }
             try {
                 recognition.start();
                 isListening = true; // Sätt flagga
                 showMessage('Lyssna...', 'text-blue-600');
                 listeningSpinner.classList.remove('hidden');
+                console.log("Recognition started for word:", currentWord); // Log when recognition starts
             } catch (e) {
                 console.error("Fel vid start av taligenkänning:", e);
                 isListening = false; // Återställ flagga vid fel
@@ -330,6 +341,7 @@
                 recognition.stop();
                 isListening = false; // Återställ flagga
                 listeningSpinner.classList.add('hidden');
+                console.log("Recognition stopped."); // Log when recognition stops
             }
         }
 
@@ -355,10 +367,11 @@
         }
 
         // Funktion för att välja nästa ord
-        function getNextWord() { // Ändrat från getNextLetter
+        function getNextWord() {
             // Prioritera ord som eleven har svarat fel på
             const incorrectWords = wordsToPractice.filter(word => attempts[word] && attempts[word].correct === 0 && attempts[word].total > 0);
             if (incorrectWords.length > 0) {
+                console.log("Prioritizing incorrect word:", incorrectWords[0]);
                 return incorrectWords[Math.floor(Math.random() * incorrectWords.length)];
             }
 
@@ -372,10 +385,12 @@
             // Välj ett slumpmässigt ord från de aktuella orden att öva på
             if (wordsToPractice.length > 0) {
                 const randomIndex = Math.floor(Math.random() * wordsToPractice.length);
+                console.log("Selecting random word:", wordsToPractice[randomIndex]);
                 return wordsToPractice[randomIndex];
             }
 
             // Om alla ord är klarade
+            console.log("All words mastered. Game ending.");
             return null;
         }
 
@@ -400,10 +415,6 @@
                 isCorrect = true;
             }
 
-            // Här kan man lägga till mer avancerad logik för att hantera
-            // vanliga uttalsfel eller synonymer om det behövs, men för enkla ord
-            // är en direkt jämförelse ofta tillräcklig.
-
             if (isCorrect) {
                 showMessage('Rätt! Bra jobbat!', 'text-green-600');
                 updateStars(1);
@@ -414,6 +425,7 @@
                     masteredWords.add(currentWord);
                     if (initialWords.includes(currentWord)) {
                         initialWordsMasteredCount++;
+                        console.log(`Initial words mastered count: ${initialWordsMasteredCount}`);
                     }
                 }
 
@@ -421,6 +433,7 @@
                 const index = wordsToPractice.indexOf(currentWord);
                 if (index > -1 && attempts[currentWord].correct > 0) {
                     wordsToPractice.splice(index, 1);
+                    console.log(`Removed '${currentWord}' from practice list.`);
                 }
 
             } else {
@@ -429,31 +442,36 @@
                 // Lägg till ordet igen i wordsToPractice om det inte redan finns där, för att öva mer
                 if (!wordsToPractice.includes(currentWord)) {
                     wordsToPractice.push(currentWord);
+                    console.log(`Added '${currentWord}' back to practice list due to incorrect answer.`);
                 }
             }
+            console.log(`Current word: ${currentWord}, Spoken: ${spokenText}, Correct: ${isCorrect}, Stars: ${stars}`);
+            console.log("Words to practice:", wordsToPractice);
+            console.log("Mastered words:", masteredWords);
         }
 
         // Funktion för att starta spelet
         function startGame(type) {
-            wordType = type; // Ändrat från letterType
+            wordType = type;
             stars = 3; // Återställ stjärnor
             attempts = {}; // Återställ försök
             masteredWords.clear(); // Återställ klarade ord
             initialWordsMasteredCount = 0; // Återställ räknare för initiala ord
             wordsToPractice = [...initialWords]; // Börja med initiala ord
             gameActive = true;
+            console.log("Game started. Type:", wordType);
 
             startScreen.classList.add('hidden');
             gameScreen.classList.remove('hidden');
             resultsScreen.classList.add('hidden');
 
             renderStars();
-            displayNextWord(); // Ändrat från displayNextLetter
+            displayNextWord();
         }
 
         // Funktion för att visa nästa ord och starta lyssnandet
-        function displayNextWord() { // Ändrat från displayNextLetter
-            currentWord = getNextWord(); // Ändrat från getNextLetter
+        function displayNextWord() {
+            currentWord = getNextWord();
 
             if (currentWord === null) {
                 // Alla ord är klarade
@@ -461,12 +479,12 @@
                 return;
             }
 
-            wordDisplay.textContent = wordType === 'uppercase' ? currentWord : currentWord.toLowerCase(); // Ändrat från letterDisplay
+            wordDisplay.textContent = wordType === 'uppercase' ? currentWord : currentWord.toLowerCase();
             nextWordBtn.classList.add('hidden'); // Dölj knappen för nästa ord
             
             // Se till att taligenkännings-UI är synlig
             speechInputUI.classList.remove('hidden');
-            showMessage('Säg ordet:', 'text-blue-600'); // Ändrat från "Säg bokstaven"
+            showMessage('Säg ordet:', 'text-blue-600');
             startListening();
         }
 
@@ -477,6 +495,7 @@
             gameScreen.classList.add('hidden');
             resultsScreen.classList.remove('hidden');
             showResults();
+            console.log("Game stopped. Final stars:", stars);
         }
 
         // Funktion för att visa resultat
@@ -501,13 +520,14 @@
                 });
             }
             finalStars.textContent = stars;
+            console.log("Results displayed.");
         }
 
         // Händelselyssnare
         startUppercaseBtn.addEventListener('click', () => startGame('uppercase'));
         startLowercaseBtn.addEventListener('click', () => startGame('lowercase'));
         stopGameBtn.addEventListener('click', stopGame);
-        nextWordBtn.addEventListener('click', displayNextWord); // Ändrat från nextLetterBtn
+        nextWordBtn.addEventListener('click', displayNextWord);
         
         playAgainBtn.addEventListener('click', () => {
             resultsScreen.classList.add('hidden');
@@ -528,6 +548,7 @@
             showMessage('', 'text-blue-600'); // Rensa meddelandefältet
             wordDisplay.textContent = ''; // Rensa ordvisningen
             initSpeechRecognition(); // Försök initiera taligenkänning igen
+            console.log("Game reset. Ready to play again.");
         });
 
         // Initiera taligenkänning när sidan laddats
