@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bokstavsspelet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Ljusblå bakgrund */
+        }
+        .game-container {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 1.5rem; /* Mer rundade hörn */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 2.5rem;
+            max-width: 90%;
+            width: 600px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem; /* Rundade knappar */
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Mörkare indigo */
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        .btn-secondary {
+            background-color: #6b7280; /* Grå */
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563; /* Mörkare grå */
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        .btn-green {
+            background-color: #10b981; /* Grön */
+            color: white;
+        }
+        .btn-green:hover {
+            background-color: #059669; /* Mörkare grön */
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        .star {
+            color: #fcd34d; /* Guldgul */
+            font-size: 2.5rem;
+            margin: 0 0.25rem;
+        }
+        .star-empty {
+            color: #d1d5db; /* Ljusgrå */
+            font-size: 2.5rem;
+            margin: 0 0.25rem;
+        }
+        .letter-display {
+            font-size: 8rem; /* Stor bokstav */
+            font-weight: 700;
+            color: #1a202c; /* Mörk text */
+            margin-bottom: 1.5rem;
+            min-height: 128px; /* För att undvika CLS */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .message-box {
+            min-height: 3rem; /* För att undvika CLS */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #374151;
+        }
+        .attempts-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .attempts-list li:last-child {
+            border-bottom: none;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4f46e5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .disabled-button {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container" class="game-container">
+        <div id="start-screen" class="card">
+            <h1 class="text-4xl font-bold mb-4 text-gray-800">Bokstavsspelet</h1>
+            <p class="text-lg text-gray-600 mb-6">Välj om du vill träna på versaler (stora bokstäver) eller gemener (små bokstäver):</p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <button id="start-uppercase-btn" class="btn btn-primary flex-1">Versaler</button>
+                <button id="start-lowercase-btn" class="btn btn-primary flex-1">Gemener</button>
+            </div>
+            <p id="speech-api-warning" class="text-sm text-red-500 mt-4 hidden">
+                Din webbläsare stöder inte Web Speech API. Spelet kräver taligenkänning för att fungera.
+                Vänligen använd en webbläsare som Chrome, Edge eller Firefox.
+            </p>
+        </div>
+
+        <div id="game-screen" class="card hidden">
+            <div class="flex justify-between items-center mb-4">
+                <div id="stars-display" class="flex">
+                    </div>
+                <button id="stop-game-btn" class="btn btn-secondary">Stoppa spelet</button>
+            </div>
+            <div id="letter-display" class="letter-display"></div>
+            <p id="prompt-text" class="text-2xl text-gray-700 mb-2">Säg bokstaven:</p>
+            <div id="message-box" class="message-box text-blue-600">
+                <div id="listening-spinner" class="spinner hidden"></div>
+                <span id="listening-text"></span>
+            </div>
+            <button id="next-letter-btn" class="btn btn-green hidden">Nästa bokstav</button>
+        </div>
+
+        <div id="results-screen" class="card hidden">
+            <h2 class="text-3xl font-bold mb-4 text-gray-800">Resultat</h2>
+            <p class="text-lg text-gray-600 mb-4">Här är en sammanfattning av dina försök:</p>
+            <ul id="attempts-list" class="attempts-list text-left text-gray-700">
+                </ul>
+            <p class="text-xl font-semibold mt-4 text-gray-800">Totalt antal stjärnor: <span id="final-stars"></span></p>
+            <button id="play-again-btn" class="btn btn-primary mt-6">Spela igen</button>
+        </div>
+    </div>
+
+    <script>
+        // Kontrollera om Web Speech API stöds
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const SpeechGrammarList = window.SpeechGrammarList || window.webkitSpeechGrammarList;
+        const SpeechRecognitionEvent = window.SpeechRecognitionEvent || window.webkitSpeechRecognitionEvent;
+
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        const startUppercaseBtn = document.getElementById('start-uppercase-btn');
+        const startLowercaseBtn = document.getElementById('start-lowercase-btn');
+        const speechApiWarning = document.getElementById('speech-api-warning');
+        const starsDisplay = document.getElementById('stars-display');
+        const stopGameBtn = document.getElementById('stop-game-btn');
+        const letterDisplay = document.getElementById('letter-display');
+        const promptText = document.getElementById('prompt-text');
+        const messageBox = document.getElementById('message-box');
+        const listeningSpinner = document.getElementById('listening-spinner');
+        const listeningText = document.getElementById('listening-text');
+        const nextLetterBtn = document.getElementById('next-letter-btn');
+        const attemptsList = document.getElementById('attempts-list');
+        const finalStars = document.getElementById('final-stars');
+        const playAgainBtn = document.getElementById('play-again-btn');
+
+        let recognition;
+        let letterType = ''; // 'uppercase' eller 'lowercase'
+        let currentLetter = '';
+        let stars = 3; // Initiala stjärnor
+        const maxStars = 5; // Max antal stjärnor
+        const minStars = 0; // Min antal stjärnor
+
+        // Bokstäver för första fasen
+        const initialLetters = ['A', 'O', 'E', 'I', 'S', 'L', 'R', 'N', 'V', 'M'];
+        // Alla bokstäver i alfabetet
+        const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ'.split('');
+
+        // Spårar försök för varje bokstav
+        let attempts = {}; // { 'A': { correct: 0, total: 0 }, ... }
+        // Lista över bokstäver att öva på, inklusive de som är felaktiga
+        let lettersToPractice = [];
+        // Bokstäver som har klarats (minst ett korrekt försök)
+        let masteredLetters = new Set();
+        // Antal initiala bokstäver som klarats
+        let initialLettersMasteredCount = 0;
+        let gameActive = false; // Kontrollerar om spelet är igång
+        let isListening = false; // Ny flagga för att undvika dubbla startar
+
+        // Funktion för att initiera taligenkänning
+        function initSpeechRecognition() {
+            if (!SpeechRecognition) {
+                speechApiWarning.classList.remove('hidden');
+                startUppercaseBtn.disabled = true;
+                startLowercaseBtn.disabled = true;
+                startUppercaseBtn.classList.add('disabled-button');
+                startLowercaseBtn.classList.add('disabled-button');
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = false; // Lyssna bara en gång per anrop
+            recognition.lang = 'sv-SE'; // Svenska
+            recognition.interimResults = false; // Vill bara ha slutresultat
+            recognition.maxAlternatives = 1; // Bara det bästa resultatet
+
+            recognition.onresult = (event) => {
+                isListening = false; // Slutar lyssna efter resultat
+                const speechResult = event.results[0][0].transcript.trim().toUpperCase();
+                console.log('Taligenkänningsresultat:', speechResult);
+                handleSpeechResult(speechResult);
+            };
+
+            recognition.onspeechend = () => {
+                // recognition.stop(); // Stoppa när talet är slut, hanteras av onend
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Taligenkänningsfel:', event.error);
+                isListening = false; // Slutar lyssna vid fel
+                listeningSpinner.classList.add('hidden'); // Dölj spinner vid fel
+
+                if (event.error === 'no-speech') {
+                    showMessage('Jag hörde inget. Försök igen!', 'text-yellow-600');
+                    // Om inget tal, och spelet är aktivt, försök att lyssna igen
+                    if (gameActive) {
+                        setTimeout(() => startListening(), 1000);
+                    }
+                } else if (event.error === 'not-allowed') {
+                    // Mikrofonåtkomst nekades. Ge tydliga instruktioner.
+                    showMessage('Mikrofonåtkomst nekades. Vänligen tillåt mikrofonåtkomst i webbläsarens inställningar (oftast under "Webbplatsinställningar" eller "Sekretess och säkerhet") för att spela.', 'text-red-600');
+                    gameActive = false; // Stoppa spelets progression
+                    nextLetterBtn.classList.remove('hidden'); // Visa "Nästa bokstav" så att spelet inte låser sig
+                    promptText.classList.add('hidden');
+                } else {
+                    showMessage('Ett oväntat fel uppstod med taligenkänningen. Försök igen.', 'text-red-600');
+                    // För andra fel, försök att starta om lyssnandet om spelet är aktivt
+                    if (gameActive) {
+                        setTimeout(() => startListening(), 1000);
+                    }
+                }
+            };
+
+            recognition.onend = () => {
+                isListening = false; // Alltid sätt till false när recognition avslutas
+                // Om spelet är aktivt och vi väntar på tal (nästa bokstav-knappen är dold),
+                // försök att starta om lyssnandet efter en kort fördröjning.
+                if (gameActive && nextLetterBtn.classList.contains('hidden')) {
+                    setTimeout(() => {
+                        startListening(); // Försök att starta om
+                    }, 500);
+                }
+            };
+        }
+
+        // Funktion för att visa meddelanden
+        function showMessage(msg, colorClass = 'text-blue-600') {
+            messageBox.innerHTML = `<span id="listening-text">${msg}</span>`;
+            messageBox.className = `message-box ${colorClass}`;
+            listeningSpinner.classList.add('hidden');
+        }
+
+        // Funktion för att starta lyssnandet
+        function startListening() {
+            if (!recognition || isListening) return; // Förhindra dubbla startar
+            try {
+                recognition.start();
+                isListening = true; // Sätt flagga
+                showMessage('Lyssna...', 'text-blue-600');
+                listeningSpinner.classList.remove('hidden');
+            } catch (e) {
+                console.error("Fel vid start av taligenkänning:", e);
+                isListening = false; // Återställ flagga vid fel
+                if (e.name === 'InvalidStateError') {
+                    showMessage('Taligenkänning är redan aktiv eller i ett ogiltigt tillstånd.', 'text-gray-500');
+                } else {
+                    showMessage('Kunde inte starta mikrofonen. Försök igen.', 'text-red-600');
+                    // Om vi inte kan starta, tillåt användaren att gå vidare
+                    nextLetterBtn.classList.remove('hidden');
+                    promptText.classList.add('hidden');
+                }
+            }
+        }
+
+        // Funktion för att stoppa lyssnandet
+        function stopListening() {
+            if (recognition && isListening) { // Stoppa bara om vi lyssnar
+                recognition.stop();
+                isListening = false; // Återställ flagga
+                listeningSpinner.classList.add('hidden');
+            }
+        }
+
+        // Funktion för att rendera stjärnor
+        function renderStars() {
+            starsDisplay.innerHTML = '';
+            for (let i = 0; i < maxStars; i++) {
+                const starIcon = document.createElement('i');
+                starIcon.classList.add('fa-solid');
+                if (i < stars) {
+                    starIcon.classList.add('fa-star', 'star');
+                } else {
+                    starIcon.classList.add('fa-star', 'star-empty');
+                }
+                starsDisplay.appendChild(starIcon);
+            }
+        }
+
+        // Funktion för att uppdatera stjärnor
+        function updateStars(change) {
+            stars = Math.max(minStars, Math.min(maxStars, stars + change));
+            renderStars();
+        }
+
+        // Funktion för att välja nästa bokstav
+        function getNextLetter() {
+            // Prioritera bokstäver som eleven har svarat fel på
+            const incorrectLetters = lettersToPractice.filter(letter => attempts[letter] && attempts[letter].correct === 0 && attempts[letter].total > 0);
+            if (incorrectLetters.length > 0) {
+                return incorrectLetters[Math.floor(Math.random() * incorrectLetters.length)];
+            }
+
+            // Om 9 av de 10 initiala bokstäverna är klarade, lägg till resten av alfabetet
+            if (initialLettersMasteredCount >= 9 && lettersToPractice.length < allLetters.length) {
+                const remainingLetters = allLetters.filter(letter => !masteredLetters.has(letter));
+                lettersToPractice = [...new Set([...lettersToPractice, ...remainingLetters])]; // Lägg till unika nya bokstäver
+                console.log('Alla bokstäver aktiverade:', lettersToPractice);
+            }
+
+            // Välj en slumpmässig bokstav från de aktuella bokstäverna att öva på
+            if (lettersToPractice.length > 0) {
+                const randomIndex = Math.floor(Math.random() * lettersToPractice.length);
+                return lettersToPractice[randomIndex];
+            }
+
+            // Om alla bokstäver är klarade
+            return null;
+        }
+
+        // Hantera taligenkänningsresultat
+        function handleSpeechResult(spokenText) {
+            stopListening(); // Stoppa lyssnandet direkt efter resultat
+            nextLetterBtn.classList.remove('hidden'); // Visa knappen för nästa bokstav
+            promptText.classList.add('hidden'); // Dölj "Säg bokstaven"
+            listeningSpinner.classList.add('hidden'); // Dölj spinner
+
+            // Uppdatera försök för aktuell bokstav
+            if (!attempts[currentLetter]) {
+                attempts[currentLetter] = { correct: 0, total: 0 };
+            }
+            attempts[currentLetter].total++;
+
+            const expectedLetter = letterType === 'uppercase' ? currentLetter : currentLetter.toLowerCase();
+            const spokenLetterNormalized = spokenText.toUpperCase(); // Normalisera till versaler för jämförelse
+
+            let isCorrect = false;
+
+            // Enkel jämförelse för enskilda bokstäver
+            if (spokenLetterNormalized === currentLetter) {
+                isCorrect = true;
+            } else if (spokenLetterNormalized === 'Ä' && currentLetter === 'Ä') {
+                isCorrect = true;
+            } else if (spokenLetterNormalized === 'Ö' && currentLetter === 'Ö') {
+                isCorrect = true;
+            } else if (spokenLetterNormalized === 'Å' && currentLetter === 'Å') {
+                isCorrect = true;
+            }
+
+            // Hantera vanliga uttalsfel eller alternativa uttal för svenska bokstäver
+            const commonMispronunciations = {
+                'A': ['A'], // Vanligt uttal
+                'B': ['B'],
+                'C': ['C'],
+                'D': ['D'],
+                'E': ['E'],
+                'F': ['F'],
+                'G': ['G'],
+                'H': ['H'],
+                'I': ['I'],
+                'J': ['J'],
+                'K': ['K'],
+                'L': ['L'],
+                'M': ['M'],
+                'N': ['N'],
+                'O': ['O'],
+                'P': ['P'],
+                'Q': ['Q'],
+                'R': ['R'],
+                'S': ['S'],
+                'T': ['T'],
+                'U': ['U'],
+                'V': ['V'],
+                'W': ['W'],
+                'X': ['X'],
+                'Y': ['Y'],
+                'Z': ['Z'],
+                'Å': ['Å', 'O'], // Å kan ibland låta som O
+                'Ä': ['Ä', 'E'], // Ä kan ibland låta som E
+                'Ö': ['Ö', 'O'], // Ö kan ibland låta som O
+            };
+
+            if (commonMispronunciations[currentLetter] && commonMispronunciations[currentLetter].includes(spokenLetterNormalized)) {
+                isCorrect = true;
+            }
+
+            if (isCorrect) {
+                showMessage('Rätt! Bra jobbat!', 'text-green-600');
+                updateStars(1);
+                attempts[currentLetter].correct++;
+
+                // Markera bokstaven som klarad om det är första gången den klaras
+                if (!masteredLetters.has(currentLetter)) {
+                    masteredLetters.add(currentLetter);
+                    if (initialLetters.includes(currentLetter)) {
+                        initialLettersMasteredCount++;
+                    }
+                }
+
+                // Ta bort bokstaven från lettersToPractice om den nu är korrekt och inte behöver övas mer
+                // Vi tar bort den bara om den har klarats minst en gång
+                const index = lettersToPractice.indexOf(currentLetter);
+                if (index > -1 && attempts[currentLetter].correct > 0) {
+                    lettersToPractice.splice(index, 1);
+                }
+
+            } else {
+                showMessage(`Fel. Du sa "${spokenText}". Försök igen!`, 'text-red-600');
+                updateStars(-1);
+                // Lägg till bokstaven igen i lettersToPractice om den inte redan finns där, för att öva mer
+                if (!lettersToPractice.includes(currentLetter)) {
+                    lettersToPractice.push(currentLetter);
+                }
+            }
+        }
+
+        // Funktion för att starta spelet
+        function startGame(type) {
+            letterType = type;
+            stars = 3; // Återställ stjärnor
+            attempts = {}; // Återställ försök
+            masteredLetters.clear(); // Återställ klarade bokstäver
+            initialLettersMasteredCount = 0; // Återställ räknare för initiala bokstäver
+            lettersToPractice = [...initialLetters]; // Börja med initiala bokstäver
+            gameActive = true;
+
+            startScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            resultsScreen.classList.add('hidden');
+
+            renderStars();
+            displayNextLetter();
+        }
+
+        // Funktion för att visa nästa bokstav
+        function displayNextLetter() {
+            currentLetter = getNextLetter();
+
+            if (currentLetter === null) {
+                // Alla bokstäver är klarade
+                stopGame();
+                return;
+            }
+
+            letterDisplay.textContent = letterType === 'uppercase' ? currentLetter : currentLetter.toLowerCase();
+            showMessage('Säg bokstaven:', 'text-blue-600');
+            promptText.classList.remove('hidden'); // Visa "Säg bokstaven"
+            nextLetterBtn.classList.add('hidden'); // Dölj knappen för nästa bokstav
+            startListening();
+        }
+
+        // Funktion för att stoppa spelet
+        function stopGame() {
+            gameActive = false;
+            stopListening();
+            gameScreen.classList.add('hidden');
+            resultsScreen.classList.remove('hidden');
+            showResults();
+        }
+
+        // Funktion för att visa resultat
+        function showResults() {
+            attemptsList.innerHTML = '';
+            // Visa alla bokstäver som har varit med i spelet, sorterade
+            const sortedLetters = Object.keys(attempts).sort();
+
+            if (sortedLetters.length === 0) {
+                const listItem = document.createElement('li');
+                listItem.textContent = 'Inga bokstäver övades under denna omgång.';
+                attemptsList.appendChild(listItem);
+            } else {
+                sortedLetters.forEach(letter => {
+                    const data = attempts[letter];
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <span>${letterType === 'uppercase' ? letter : letter.toLowerCase()}</span>
+                        <span>Försök: ${data.total} (${data.correct} rätt)</span>
+                    `;
+                    attemptsList.appendChild(listItem);
+                });
+            }
+            finalStars.textContent = stars;
+        }
+
+        // Händelselyssnare
+        startUppercaseBtn.addEventListener('click', () => startGame('uppercase'));
+        startLowercaseBtn.addEventListener('click', () => startGame('lowercase'));
+        stopGameBtn.addEventListener('click', stopGame);
+        nextLetterBtn.addEventListener('click', displayNextLetter);
+        playAgainBtn.addEventListener('click', () => {
+            resultsScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            // Återställ spelet helt för en ny omgång
+            stars = 3;
+            attempts = {};
+            masteredLetters.clear();
+            initialLettersMasteredCount = 0;
+            lettersToPractice = [];
+            gameActive = false;
+            showMessage('', 'text-blue-600'); // Rensa meddelandefältet
+            letterDisplay.textContent = ''; // Rensa bokstavsvisningen
+        });
+
+        // Initiera taligenkänning när sidan laddats
+        window.onload = initSpeechRecognition;
+
+    </script>
+</body>
+</html>
