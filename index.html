@@ -436,7 +436,7 @@
                 }
 
             } else {
-                showMessage(`Fel. Du sa "${spokenText}". Försök igen!`, 'text-red-600');
+                showMessage(`Jag hörde "${spokenText}". Försök igen!`, 'text-red-600');
                 updateStars(-1);
                 // Lägg till ordet igen i wordsToPractice om det inte redan finns där, för att öva mer
                 if (!wordsToPractice.includes(currentWord)) {
