@@ -119,6 +119,18 @@
             opacity: 0.6;
             cursor: not-allowed;
         }
+        .action-buttons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        @media (min-width: 640px) {
+            .action-buttons-container {
+                flex-direction: row;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -152,7 +164,10 @@
                 </div>
             </div>
 
-            <button id="next-word-btn" class="btn btn-green hidden mt-4">Nästa ord</button>
+            <div id="action-buttons-container" class="action-buttons-container hidden">
+                <button id="try-again-btn" class="btn btn-primary flex-1">Försök igen</button>
+                <button id="skip-word-btn" class="btn btn-secondary flex-1">Hoppa vidare</button>
+            </div>
         </div>
 
         <div id="results-screen" class="card hidden">
@@ -179,7 +194,7 @@
         const speechApiWarning = document.getElementById('speech-api-warning');
         const starsDisplay = document.getElementById('stars-display');
         const stopGameBtn = document.getElementById('stop-game-btn');
-        const wordDisplay = document.getElementById('word-display'); // Ändrat från letterDisplay
+        const wordDisplay = document.getElementById('word-display');
         
         // Taligenkännings-UI element
         const speechInputUI = document.getElementById('speech-input-ui');
@@ -188,21 +203,23 @@
         const listeningSpinner = document.getElementById('listening-spinner');
         const listeningText = document.getElementById('listening-text');
 
-        const nextWordBtn = document.getElementById('next-word-btn'); // Ändrat från nextLetterBtn
+        // Nya knappar för att hantera felaktiga svar
+        const actionButtonsContainer = document.getElementById('action-buttons-container');
+        const tryAgainBtn = document.getElementById('try-again-btn');
+        const skipWordBtn = document.getElementById('skip-word-btn');
+
         const attemptsList = document.getElementById('attempts-list');
         const finalStars = document.getElementById('final-stars');
         const playAgainBtn = document.getElementById('play-again-btn');
 
         let recognition;
-        let wordType = ''; // 'uppercase' eller 'lowercase'
+        let wordType = '';
         let currentWord = '';
-        let stars = 3; // Initiala stjärnor
-        const maxStars = 5; // Max antal stjärnor
-        const minStars = 0; // Min antal stjärnor
+        let stars = 3;
+        const maxStars = 5;
+        const minStars = 0;
 
-        // Ord för första fasen (2-3 bokstäver, enkla svenska ord)
         const initialWords = ['SOL', 'BIL', 'HUS', 'MER', 'JAG', 'DU', 'ÄTA', 'SE', 'STOR', 'LITEN'];
-        // Alla ord i alfabetet (utökad lista med enkla 2-4 bokstavsord)
         const allWords = [
             'SOL', 'BIL', 'HUS', 'MER', 'JAG', 'DU', 'ÄTA', 'SE', 'STOR', 'LITEN',
             'EN', 'PÅ', 'OM', 'FÅ', 'HA', 'GE', 'TA', 'GÅ', 'ÅKA', 'BRA', 'NU', 'DÄR',
@@ -211,21 +228,16 @@
             'HEJ', 'GOD', 'DAG', 'NATT', 'MAT', 'VATTEN', 'BOK', 'PENNA', 'STOL', 'BORD'
         ];
 
-        // Spårar försök för varje ord
-        let attempts = {}; // { 'SOL': { correct: 0, total: 0 }, ... }
-        // Lista över ord att öva på, inklusive de som är felaktiga
+        let attempts = {};
         let wordsToPractice = [];
-        // Ord som har klarats (minst ett korrekt försök)
         let masteredWords = new Set();
-        // Antal initiala ord som klarats
         let initialWordsMasteredCount = 0;
-        let gameActive = false; // Kontrollerar om spelet är igång
-        let isListening = false; // Ny flagga för att undvika dubbla startar
+        let gameActive = false;
+        let isListening = false;
 
         // Funktion för att initiera taligenkänning
         function initSpeechRecognition() {
             if (!SpeechRecognition) {
-                // Om Web Speech API inte stöds alls
                 speechApiWarning.classList.remove('hidden');
                 startUppercaseBtn.disabled = true;
                 startLowercaseBtn.disabled = true;
@@ -237,10 +249,10 @@
             }
 
             recognition = new SpeechRecognition();
-            recognition.continuous = false; // Lyssna bara en gång per anrop
-            recognition.lang = 'sv-SE'; // Svenska
-            recognition.interimResults = false; // Vill bara ha slutresultat
-            recognition.maxAlternatives = 1; // Bara det bästa resultatet
+            recognition.continuous = false;
+            recognition.lang = 'sv-SE';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
 
             recognition.onresult = (event) => {
                 isListening = false; // Återställ flaggan direkt vid resultat
@@ -260,15 +272,14 @@
 
                 if (event.error === 'no-speech') {
                     showMessage('Jag hörde inget. Försök igen!', 'text-yellow-600');
-                    // Om inget tal, och spelet är aktivt, försök att lyssna igen
                     if (gameActive) {
                         setTimeout(() => startListening(), 1000);
                     }
                 } else if (event.error === 'not-allowed') {
-                    // Mikrofonåtkomst nekades. Ge tydliga instruktioner.
                     showMessage('Mikrofonåtkomst nekades. Spelet kräver mikrofon för att fungera. Vänligen kontrollera webbläsarens inställningar (oftast under "Webbplatsinställningar" eller "Sekretess och säkerhet") och tillåt mikrofonåtkomst för denna sida.', 'text-red-600');
-                    gameActive = false; // Stoppa spelets progression
-                    nextWordBtn.classList.remove('hidden'); // Visa "Nästa ord" så att spelet inte låser sig helt
+                    gameActive = false;
+                    // Visa hoppa vidare/försök igen knappar om mikrofonen inte fungerar
+                    showActionButtons(true);
                     promptText.classList.add('hidden');
                     // Inaktivera startknapparna om mikrofonen inte kan användas
                     startUppercaseBtn.disabled = true;
@@ -277,7 +288,6 @@
                     startLowercaseBtn.classList.add('disabled-button');
                 } else {
                     showMessage(`Ett oväntat fel uppstod med taligenkänningen: ${event.error}. Försök igen.`, 'text-red-600');
-                    // För andra fel, försök att starta om lyssnandet om spelet är aktivt
                     if (gameActive) {
                         setTimeout(() => startListening(), 1000);
                     }
@@ -285,13 +295,12 @@
             };
 
             recognition.onend = () => {
-                console.log("Recognition onend event fired."); // Log onend event
+                console.log("Recognition onend event fired.");
                 isListening = false; // Alltid sätt till false när recognition avslutas
-                // Om spelet är aktivt och vi väntar på tal (nästa ord-knappen är dold),
-                // försök att starta om lyssnandet efter en kort fördröjning.
-                if (gameActive && nextWordBtn.classList.contains('hidden')) {
+                // Om spelet är aktivt och vi inte visar action-knappar (dvs. vi väntar på tal)
+                if (gameActive && actionButtonsContainer.classList.contains('hidden')) {
                     setTimeout(() => {
-                        startListening(); // Försök att starta om
+                        startListening();
                     }, 500);
                 }
             };
@@ -315,20 +324,29 @@
                 return;
             }
             try {
+                // Försök stoppa eventuell pågående igenkänning för att rensa tillstånd
+                recognition.stop();
+            } catch (e) {
+                if (e.name !== 'InvalidStateError') {
+                    console.error("Error stopping recognition before starting:", e);
+                }
+            }
+
+            try {
                 recognition.start();
-                isListening = true; // Sätt flagga
+                isListening = true;
                 showMessage('Lyssna...', 'text-blue-600');
                 listeningSpinner.classList.remove('hidden');
-                console.log("Recognition started for word:", currentWord); // Log when recognition starts
+                console.log("Recognition started for word:", currentWord);
             } catch (e) {
                 console.error("Fel vid start av taligenkänning:", e);
-                isListening = false; // Återställ flagga vid fel
+                isListening = false;
                 if (e.name === 'InvalidStateError') {
                     showMessage('Taligenkänning är redan aktiv eller i ett ogiltigt tillstånd.', 'text-gray-500');
                 } else {
                     showMessage('Kunde inte starta mikrofonen. Försök igen.', 'text-red-600');
-                    // Om vi inte kan starta, tillåt användaren att gå vidare
-                    nextWordBtn.classList.remove('hidden');
+                    // Om vi inte kan starta, visa alternativ för att försöka igen eller hoppa vidare
+                    showActionButtons(true);
                     promptText.classList.add('hidden');
                 }
             }
@@ -336,11 +354,17 @@
 
         // Funktion för att stoppa lyssnandet
         function stopListening() {
-            if (recognition && isListening) { // Stoppa bara om vi lyssnar
-                recognition.stop();
-                isListening = false; // Återställ flagga
+            if (recognition && isListening) {
+                try {
+                    recognition.stop();
+                } catch (e) {
+                    if (e.name !== 'InvalidStateError') {
+                        console.error("Error stopping recognition:", e);
+                    }
+                }
+                isListening = false;
                 listeningSpinner.classList.add('hidden');
-                console.log("Recognition stopped."); // Log when recognition stops
+                console.log("Recognition stopped.");
             }
         }
 
@@ -367,49 +391,51 @@
 
         // Funktion för att välja nästa ord
         function getNextWord() {
-            // Prioritera ord som eleven har svarat fel på
             const incorrectWords = wordsToPractice.filter(word => attempts[word] && attempts[word].correct === 0 && attempts[word].total > 0);
             if (incorrectWords.length > 0) {
                 console.log("Prioritizing incorrect word:", incorrectWords[0]);
                 return incorrectWords[Math.floor(Math.random() * incorrectWords.length)];
             }
 
-            // Om 9 av de 10 initiala orden är klarade, lägg till resten av orden
             if (initialWordsMasteredCount >= 9 && wordsToPractice.length < allWords.length) {
                 const remainingWords = allWords.filter(word => !masteredWords.has(word));
-                wordsToPractice = [...new Set([...wordsToPractice, ...remainingWords])]; // Lägg till unika nya ord
+                wordsToPractice = [...new Set([...wordsToPractice, ...remainingWords])];
                 console.log('Alla ord aktiverade:', wordsToPractice);
             }
 
-            // Välj ett slumpmässigt ord från de aktuella orden att öva på
             if (wordsToPractice.length > 0) {
                 const randomIndex = Math.floor(Math.random() * wordsToPractice.length);
                 console.log("Selecting random word:", wordsToPractice[randomIndex]);
                 return wordsToPractice[randomIndex];
             }
 
-            // Om alla ord är klarade
             console.log("All words mastered. Game ending.");
             return null;
         }
 
+        // Funktion för att visa/dölja action-knapparna (försök igen/hoppa vidare)
+        function showActionButtons(show) {
+            if (show) {
+                actionButtonsContainer.classList.remove('hidden');
+            } else {
+                actionButtonsContainer.classList.add('hidden');
+            }
+        }
+
         // Hantera taligenkänningsresultat
         function handleSpeechResult(spokenText) {
-            nextWordBtn.classList.remove('hidden'); // Visa knappen för nästa ord
+            // Dölj alltid action-knapparna när ett resultat har behandlats
+            showActionButtons(false); 
             
-            // Uppdatera försök för aktuellt ord
             if (!attempts[currentWord]) {
                 attempts[currentWord] = { correct: 0, total: 0 };
             }
             attempts[currentWord].total++;
 
-            // Normalisera det talade ordet och det förväntade ordet för jämförelse
             const normalizedSpokenText = spokenText.trim().toUpperCase();
             const normalizedCurrentWord = currentWord.trim().toUpperCase();
 
             let isCorrect = false;
-
-            // Jämför det talade ordet med det aktuella ordet
             if (normalizedSpokenText === normalizedCurrentWord) {
                 isCorrect = true;
             }
@@ -419,7 +445,6 @@
                 updateStars(1);
                 attempts[currentWord].correct++;
 
-                // Markera ordet som klarat om det är första gången det klaras
                 if (!masteredWords.has(currentWord)) {
                     masteredWords.add(currentWord);
                     if (initialWords.includes(currentWord)) {
@@ -428,21 +453,23 @@
                     }
                 }
 
-                // Ta bort ordet från wordsToPractice om det nu är korrekt och inte behöver övas mer
                 const index = wordsToPractice.indexOf(currentWord);
                 if (index > -1 && attempts[currentWord].correct > 0) {
                     wordsToPractice.splice(index, 1);
                     console.log(`Removed '${currentWord}' from practice list.`);
                 }
-
+                
+                // Automatisk progression vid rätt svar
+                setTimeout(displayNextWord, 1500); // Vänta 1.5 sekunder
             } else {
-                showMessage(`Jag hörde "${spokenText}". Försök igen!`, 'text-red-600');
+                showMessage(`Fel. Du sa "${spokenText}". Försök igen!`, 'text-red-600');
                 updateStars(-1);
-                // Lägg till ordet igen i wordsToPractice om det inte redan finns där, för att öva mer
                 if (!wordsToPractice.includes(currentWord)) {
                     wordsToPractice.push(currentWord);
                     console.log(`Added '${currentWord}' back to practice list due to incorrect answer.`);
                 }
+                // Visa alternativ för att försöka igen eller hoppa vidare
+                showActionButtons(true);
             }
             console.log(`Current word: ${currentWord}, Spoken: ${spokenText}, Correct: ${isCorrect}, Stars: ${stars}`);
             console.log("Words to practice:", wordsToPractice);
@@ -452,11 +479,11 @@
         // Funktion för att starta spelet
         function startGame(type) {
             wordType = type;
-            stars = 3; // Återställ stjärnor
-            attempts = {}; // Återställ försök
-            masteredWords.clear(); // Återställ klarade ord
-            initialWordsMasteredCount = 0; // Återställ räknare för initiala ord
-            wordsToPractice = [...initialWords]; // Börja med initiala ord
+            stars = 3;
+            attempts = {};
+            masteredWords.clear();
+            initialWordsMasteredCount = 0;
+            wordsToPractice = [...initialWords];
             gameActive = true;
             console.log("Game started. Type:", wordType);
 
@@ -473,16 +500,16 @@
             currentWord = getNextWord();
 
             if (currentWord === null) {
-                // Alla ord är klarade
                 stopGame();
                 return;
             }
 
             wordDisplay.textContent = wordType === 'uppercase' ? currentWord : currentWord.toLowerCase();
-            nextWordBtn.classList.add('hidden'); // Dölj knappen för nästa ord
             
-            // Se till att taligenkännings-UI är synlig
+            // Dölj alltid action-knapparna när ett nytt ord visas
+            showActionButtons(false); 
             speechInputUI.classList.remove('hidden');
+            promptText.classList.remove('hidden'); // Visa "Säg ordet" igen
             showMessage('Säg ordet:', 'text-blue-600');
             startListening();
         }
@@ -490,7 +517,7 @@
         // Funktion för att stoppa spelet
         function stopGame() {
             gameActive = false;
-            stopListening(); // Se till att mikrofonen stoppas
+            stopListening();
             gameScreen.classList.add('hidden');
             resultsScreen.classList.remove('hidden');
             showResults();
@@ -500,7 +527,6 @@
         // Funktion för att visa resultat
         function showResults() {
             attemptsList.innerHTML = '';
-            // Visa alla ord som har varit med i spelet, sorterade
             const sortedWords = Object.keys(attempts).sort();
 
             if (sortedWords.length === 0) {
@@ -526,27 +552,37 @@
         startUppercaseBtn.addEventListener('click', () => startGame('uppercase'));
         startLowercaseBtn.addEventListener('click', () => startGame('lowercase'));
         stopGameBtn.addEventListener('click', stopGame);
-        nextWordBtn.addEventListener('click', displayNextWord);
+        
+        // Händelselyssnare för de nya knapparna
+        tryAgainBtn.addEventListener('click', () => {
+            showActionButtons(false); // Dölj knapparna
+            promptText.classList.remove('hidden'); // Visa "Säg ordet" igen
+            showMessage('Försök igen med ordet:', 'text-blue-600');
+            startListening(); // Starta lyssnandet igen för samma ord
+        });
+
+        skipWordBtn.addEventListener('click', () => {
+            showActionButtons(false); // Dölj knapparna
+            displayNextWord(); // Gå vidare till nästa ord
+        });
         
         playAgainBtn.addEventListener('click', () => {
             resultsScreen.classList.add('hidden');
             startScreen.classList.remove('hidden');
-            // Återställ spelet helt för en ny omgång
             stars = 3;
             attempts = {};
             masteredWords.clear();
             initialWordsMasteredCount = 0;
             wordsToPractice = [];
             gameActive = false;
-            // Återaktivera startknapparna om de inaktiverades pga mikrofonfel
             startUppercaseBtn.disabled = false;
             startLowercaseBtn.disabled = false;
             startUppercaseBtn.classList.remove('disabled-button');
             startLowercaseBtn.classList.remove('disabled-button');
 
-            showMessage('', 'text-blue-600'); // Rensa meddelandefältet
-            wordDisplay.textContent = ''; // Rensa ordvisningen
-            initSpeechRecognition(); // Försök initiera taligenkänning igen
+            showMessage('', 'text-blue-600');
+            wordDisplay.textContent = '';
+            initSpeechRecognition();
             console.log("Game reset. Ready to play again.");
         });
 
